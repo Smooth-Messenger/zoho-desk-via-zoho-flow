@@ -1,0 +1,66 @@
+/**
+* @ Sinch
+*
+* Last modified date: May 8th, 2024
+* Version: v1.0.0
+*/
+map check_that_message_can_be_sent(int ticket_id, string sms_content, string send_btn_state, string channel, int desk_org_id)
+{
+try
+{
+	if(channel != "SMS via Zoho Flow" || sms_content.isEmpty() || send_btn_state != "true")
+	{
+		info "stop processing outbound";
+		info "channel> " + channel;
+		info "sms_content> " + sms_content;
+		info "send_btn_state> " + send_btn_state;
+		return {"error":"Stop processing because of input validation","mobile":""};
+	}
+	ticket = zoho.desk.getRecordById(desk_org_id,"tickets",ticket_id,"zoho_desk_sms");
+	if(ticket.isEmpty())
+	{
+		info "no ticket found for " + ticket_id;
+		return {"error":"No ticket found","mobile":""};
+	}
+	info ticket;
+	contact_id = ticket.get("contactId");
+	contact = zoho.desk.getRecordById(desk_org_id,"contacts",contact_id,"zoho_desk_sms");
+	contact_mobile = contact.get("mobile");
+	mobile_error_msg = "";
+	if(contact_mobile.isEmpty())
+	{
+		mobile_error_msg = "no contact mobile found for contact> " + contact.get("id");
+		info mobile_error_msg;
+	}
+	else if(contact_mobile.startsWith('+') == false)
+	{
+		mobile_error_msg = "contact's phone does not start with E164 format " + contact.get("id");
+		info mobile_error_msg;
+	}
+	// 	add error emssage as comment if the mobile is invalid
+	if(mobile_error_msg.isEmpty() == false)
+	{
+		comment_params = Map();
+		comment_params.put("content","Error: " + mobile_error_msg);
+		comment_params.put("isPublic",false);
+		headerMap = Map();
+		headerMap.put("orgId",desk_org_id);
+		response = invokeurl
+		[
+			url :"https://desk.zoho.com.au/api/v1/tickets/" + ticket_id + "/comments"
+			type :POST
+			parameters:comment_params.toString()
+			headers:headerMap
+			connection:"zoho_desk_sms"
+		];
+		return {"error":mobile_error_msg,"mobile":""};
+	}
+	return {"mobile":contact_mobile,"error":""};
+}
+catch (e)
+{
+	info e;
+	return {"error":e,"mobile":""};
+}
+return {"error":"something wrong","mobile":""};
+}

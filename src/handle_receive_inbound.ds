@@ -1,0 +1,177 @@
+/**
+* @ Sinch
+*
+* Last modified date: May 8th, 2024
+* Version: v1.0.0
+*/
+void handle_receive_inbound(map webhook_payload, int desk_org_id)
+{
+try
+{
+	info webhook_payload;
+	source_number = webhook_payload.get("from_number");
+	message_content = webhook_payload.get("inbound_message");
+	message_id = webhook_payload.get("message_id");
+	// found existing desk contact by mobile value
+	search_value = {"mobile":source_number};
+	contact_res = zoho.desk.searchRecords(desk_org_id,"contacts",search_value,0,5,"zoho_desk_sms");
+	info "contact_res" + contact_res;
+	contact = Map();
+	ticket = Map();
+	expected_subject = "SMS with " + source_number;
+	if(contact_res.isEmpty())
+	{
+		// create new contact
+		contact_map = Map();
+		contact_map.put("mobile",source_number);
+		contact_map.put("lastName","SMS with " + source_number);
+		contact = zoho.desk.create(desk_org_id,"contacts",contact_map,"zoho_desk_sms");
+	}
+	else
+	{
+		contact = contact_res.get("data").get(0);
+		// get related tickets base on a contact
+		// 		https://desk.zoho.com/DeskAPIDocument#Contacts#Contacts_Listticketsbycontact
+		// 		Even when we request for assignee, this object doesn't have zuid for mentioning feature.
+		query_params = {"sortBy":"-createdTime","include":"team,assignee"};
+		// most recently created ticket in the front
+		tickets_of_contact = zoho.desk.getRelatedRecords(desk_org_id,"tickets","contacts",contact.get("id"),1,10,query_params,"zoho_desk_sms");
+		// 		TODO: do we need to validate channel name, status of the ticket?
+		tickets_of_contact_data = tickets_of_contact.get("data");
+		if(tickets_of_contact_data.size() > 0)
+		{
+			most_recent_timestamp = "2020-01-01".toDate();
+			biggest_date_difference = 0;
+			for each  ticket_to_check in tickets_of_contact_data
+			{
+				ticket_timestamp = ticket_to_check.get("customerResponseTime");
+				if(ticket_timestamp == null)
+				{
+					ticket_timestamp = ticket_to_check.get("createdTime");
+				}
+				ticket_timestamp = ticket_timestamp.toDate();
+				date_difference = days360(most_recent_timestamp,ticket_timestamp);
+				info ticket_timestamp;
+				info date_difference;
+				if(ticket_to_check.get("status") != "Closed" && ticket_to_check.get("cf_sms_activated") == true && date_difference > biggest_date_difference)
+				{
+					info "found recent ticket of a contact " + tickets_of_contact_data.get(0).get("id");
+					ticket = ticket_to_check;
+					most_recent_timestamp = ticket_timestamp;
+					biggest_date_difference = date_difference;
+				}
+			}
+		}
+		if(ticket.isEmpty())
+		{
+			// use get records first because search records returns cached data and won't find recently created tickets (e.g. from the first SMS)
+			recently_created_tickets = zoho.desk.getRecords(desk_org_id,"tickets",0,10,{"sortBy":"-createdTime"},"zoho_desk_sms");
+			info recently_created_tickets.size();
+			info recently_created_tickets;
+			if(recently_created_tickets.size() > 0)
+			{
+				ticket_list = recently_created_tickets.get("data");
+				for each  recent_ticket in ticket_list
+				{
+					recent_ticket_data = recent_ticket.toMap();
+					recent_ticket_subject = ifnull(recent_ticket_data.get("Subject"),recent_ticket_data.get("subject"));
+					info "subj " + recent_ticket_subject;
+					if(recent_ticket_subject != null && recent_ticket_subject == expected_subject && recent_ticket_data.get("status") != "Closed")
+					{
+						ticket = recent_ticket;
+						info "recent_ticket matched 56;" + recent_ticket;
+					}
+				}
+			}
+			if(ticket.isEmpty())
+			{
+				// find ticket we created previously
+				ticket_search_map = {"subject":expected_subject};
+				ticket_res = zoho.desk.searchRecords(desk_org_id,"tickets",ticket_search_map,0,5,"zoho_desk_sms");
+				if(!ticket_res.isEmpty())
+				{
+					ticket_data = zoho.desk.getRecordById(desk_org_id,"tickets",ticket_res.get("data").get(0).get("id"),"zoho_desk_sms");
+					if(ticket_data.isEmpty() == false && ticket_data.get("status") != "Closed")
+					{
+						info "Found ticket via search records";
+						ticket = ticket_data;
+					}
+				}
+			}
+		}
+	}
+	// 	info ticket;
+	// 	create a ticket if none existed
+	if(ticket.isEmpty())
+	{
+		// departmentId is required when creating ticket, but which one to use?
+		// for now we pickup the one has is_default.
+		// Customer can also hard code the departmentId as another parameter
+		departments_res = zoho.desk.getRecords(desk_org_id,"departments",1,10,{"":""},"zoho_desk_sms");
+		department_lists = departments_res.get("data");
+		default_department = Map();
+		for each  department in department_lists
+		{
+			if(department.get("isDefault"))
+			{
+				default_department = department;
+			}
+		}
+		if(default_department.isEmpty())
+		{
+			default_department = department_lists.get(0);
+		}
+		ticket_values = Map();
+		ticket_values.put("subject",expected_subject);
+		ticket_values.put("description",message_content);
+		ticket_values.put("contactId",contact.get("id"));
+		ticket_values.put("cf",{"cf_sms_activated":"true"});
+		ticket_values.put("channel","SMS via Zoho Flow");
+		ticket_values.put("departmentId",default_department.get("id"));
+		res = zoho.desk.create(desk_org_id,"tickets",ticket_values,"zoho_desk_sms");
+		info "created res";
+		info res;
+	}
+	else
+	{
+		// 	append the new inbound as comment to the ticket
+		// get the assigned agent or team zuid for mention feature
+		// find assigned team first
+		mention_content = "";
+		info "ticket found" + ticket;
+		if(ticket.get("teamId") != null && ticket.get("team") != null)
+		{
+			team_id = ticket.get("teamId");
+			team_name = ticket.get("team").get("name");
+			mention_content = "zsu[@team:" + team_id + "_" + team_name + "]zsu ";
+		}
+		else if(ticket.get("assigneeId") != null && ticket.get("assignee") != null && ticket.get("assignee").get("zuid") != null)
+		{
+			assignee_zuid = ticket.get("assignee").get("zuid");
+			mention_content = "zsu[@user:" + assignee_zuid + "]zsu ";
+		}
+		// create the comment
+		ticket_id = ticket.get("id");
+		comment_params = Map();
+		comment_params.put("content",mention_content + "Inbound message: " + message_content);
+		// 		comment_params.put("contentType","plainText");
+		comment_params.put("isPublic",true);
+		headerMap = Map();
+		headerMap.put("orgId",desk_org_id);
+		response = invokeurl
+		[
+			url :"https://desk.zoho.com.au/api/v1/tickets/" + ticket_id + "/comments"
+			type :POST
+			parameters:comment_params.toString()
+			headers:headerMap
+			connection:"zoho_desk_sms"
+		];
+		info "added inbound as comment";
+		info response;
+	}
+}
+catch (e)
+{
+	info e;
+}
+}

@@ -1,0 +1,38 @@
+/**
+* @ Sinch
+*
+* Last modified date: May 8th, 2024
+* Version: v1.0.0
+*/
+void create_comment_and_clear_outbound_value(int ticket_id, string sms_content, int desk_org_id)
+{
+// NB - make sure the zoho.com/zoho.com.au URL matches the data center
+try
+{
+	comment_params = Map();
+	comment_params.put("content","Outbound SMS: " + sms_content);
+	comment_params.put("contentType","plainText");
+	comment_params.put("isPublic",true);
+	headerMap = Map();
+	headerMap.put("orgId",desk_org_id);
+	response = invokeurl
+	[
+		url :"https://desk.zoho.com.au/api/v1/tickets/" + ticket_id + "/comments"
+		type :POST
+		parameters:comment_params.toString()
+		headers:headerMap
+		connection:"zoho_desk_sms"
+	];
+	info response;
+	// Go to layout, click edit properties of the field and check the API Name
+	// below is an example payload if you API name is "cf_send_sms" and "cf_sms_content" (note the cf top level key)
+	// ref: https://help.zoho.com/portal/en/community/topic/can-zoho-support-api-retrieve-data-from-my-custom-fields
+	update_value = {"cf":{"cf_send_sms":"false","cf_sms_content_to_send":"","cf_sms_activated":"true"}};
+	update_resp = zoho.desk.update(desk_org_id,"tickets",ticket_id,update_value,"zoho_desk_sms");
+	info update_resp;
+}
+catch (e)
+{
+	info e;
+}
+}
