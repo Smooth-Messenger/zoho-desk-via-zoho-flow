@@ -56,6 +56,7 @@ try
 				date_difference = days360(most_recent_timestamp,ticket_timestamp);
 				info ticket_timestamp;
 				info date_difference;
+        // TODO: there is a bug if using cf_ variable from getRelatedRecords
 				if(ticket_to_check.get("status") != "Closed" && ticket_to_check.get("cf_sms_activated") == true && date_difference > biggest_date_difference)
 				{
 					info "found recent ticket of a contact " + tickets_of_contact_data.get(0).get("id");

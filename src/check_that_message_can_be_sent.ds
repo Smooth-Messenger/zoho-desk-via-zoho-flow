@@ -21,7 +21,7 @@ try
 		info "no ticket found for " + ticket_id;
 		return {"error":"No ticket found","mobile":""};
 	}
-  if (ticket.get("cf_sms_activated") != true) {
+  if (ticket.get("cf").get("cf_sms_activated") != "true") {
 		return {"error":"Stop processing because of cf_sms_activated is false","mobile":""};
   }
 	info ticket;
