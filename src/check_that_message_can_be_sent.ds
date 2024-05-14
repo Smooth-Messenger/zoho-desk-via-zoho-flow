@@ -1,18 +1,17 @@
 /**
 * @ Sinch
 *
-* Last modified date: May 8th, 2024
-* Version: v1.0.0
+* Last modified date: May 14th, 2024
+* Version: v1.0.1
 */
-map check_that_message_can_be_sent(int ticket_id, string sms_content, string send_btn_state, string channel, int desk_org_id)
+map check_that_message_can_be_sent(int ticket_id, string sms_content, string send_btn_state, int desk_org_id)
 {
 try
 {
-	if(channel != "SMS via Zoho Flow" || sms_content.isEmpty() || send_btn_state != "true")
+	if(sms_content.isEmpty() || send_btn_state != "true")
 	{
 		info "stop processing outbound";
-		info "channel> " + channel;
-		info "sms_content> " + sms_content;
+ 		info "sms_content> " + sms_content;
 		info "send_btn_state> " + send_btn_state;
 		return {"error":"Stop processing because of input validation","mobile":""};
 	}
@@ -22,6 +21,9 @@ try
 		info "no ticket found for " + ticket_id;
 		return {"error":"No ticket found","mobile":""};
 	}
+  if (ticket.get("cf_sms_activated") != true) {
+		return {"error":"Stop processing because of cf_sms_activated is false","mobile":""};
+  }
 	info ticket;
 	contact_id = ticket.get("contactId");
 	contact = zoho.desk.getRecordById(desk_org_id,"contacts",contact_id,"zoho_desk_sms");

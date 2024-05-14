@@ -1,11 +1,15 @@
 /**
 * @ Sinch
 *
-* Last modified date: May 8th, 2024
-* Version: v1.0.0
+* Last modified date: May 14th, 2024
+* Version: v1.0.1
 */
 void handle_receive_inbound(map webhook_payload, int desk_org_id)
 {
+// true: will enable the mention feature (consume more API call)
+// change this value to false if you don't want to consume more API credit to get the agent data
+enable_mention_owner = true;
+
 try
 {
 	info webhook_payload;
@@ -36,13 +40,12 @@ try
 		query_params = {"sortBy":"-createdTime","include":"team,assignee"};
 		// most recently created ticket in the front
 		tickets_of_contact = zoho.desk.getRelatedRecords(desk_org_id,"tickets","contacts",contact.get("id"),1,10,query_params,"zoho_desk_sms");
-		// 		TODO: do we need to validate channel name, status of the ticket?
 		tickets_of_contact_data = tickets_of_contact.get("data");
 		if(tickets_of_contact_data.size() > 0)
 		{
 			most_recent_timestamp = "2020-01-01".toDate();
 			biggest_date_difference = 0;
-			for each  ticket_to_check in tickets_of_contact_data
+			for each	ticket_to_check in tickets_of_contact_data
 			{
 				ticket_timestamp = ticket_to_check.get("customerResponseTime");
 				if(ticket_timestamp == null)
@@ -62,7 +65,7 @@ try
 				}
 			}
 		}
-		if(ticket.isEmpty())
+    if(ticket.isEmpty())
 		{
 			// use get records first because search records returns cached data and won't find recently created tickets (e.g. from the first SMS)
 			recently_created_tickets = zoho.desk.getRecords(desk_org_id,"tickets",0,10,{"sortBy":"-createdTime"},"zoho_desk_sms");
@@ -71,7 +74,7 @@ try
 			if(recently_created_tickets.size() > 0)
 			{
 				ticket_list = recently_created_tickets.get("data");
-				for each  recent_ticket in ticket_list
+				for each	recent_ticket in ticket_list
 				{
 					recent_ticket_data = recent_ticket.toMap();
 					recent_ticket_subject = ifnull(recent_ticket_data.get("Subject"),recent_ticket_data.get("subject"));
@@ -110,7 +113,7 @@ try
 		departments_res = zoho.desk.getRecords(desk_org_id,"departments",1,10,{"":""},"zoho_desk_sms");
 		department_lists = departments_res.get("data");
 		default_department = Map();
-		for each  department in department_lists
+		for each	department in department_lists
 		{
 			if(department.get("isDefault"))
 			{
@@ -139,21 +142,32 @@ try
 		// find assigned team first
 		mention_content = "";
 		info "ticket found" + ticket;
-		if(ticket.get("teamId") != null && ticket.get("team") != null)
+		if (enable_mention_owner)
 		{
-			team_id = ticket.get("teamId");
-			team_name = ticket.get("team").get("name");
-			mention_content = "zsu[@team:" + team_id + "_" + team_name + "]zsu ";
-		}
-		else if(ticket.get("assigneeId") != null && ticket.get("assignee") != null && ticket.get("assignee").get("zuid") != null)
-		{
-			assignee_zuid = ticket.get("assignee").get("zuid");
-			mention_content = "zsu[@user:" + assignee_zuid + "]zsu ";
+			if (ticket.get("teamId") != null && ticket.get("team") != null)
+			{
+				team_id = ticket.get("teamId");
+				team_name = ticket.get("team").get("name");
+				mention_content = "zsu[@team:" + team_id + "_" + team_name + "]zsu ";
+			}
+			else if (ticket.get("assigneeId") != null)
+			{
+				if (ticket.get("assignee") != null && ticket.get("assignee").get("zuid") != null)
+				{
+					assignee_zuid = ticket.get("assignee").get("zuid");
+					mention_content = "zsu[@user:" + assignee_zuid + "]zsu ";
+				}
+				else
+				{
+					agent = zoho.desk.getRecordById(desk_org_id,"agents",ticket.get("assigneeId"),"zoho_desk_sms");
+          mention_content = "zsu[@user:" + agent.get("zuid") + "]zsu ";
+				}
+			}
 		}
 		// create the comment
 		ticket_id = ticket.get("id");
 		comment_params = Map();
-		comment_params.put("content",mention_content + "Inbound message: " + message_content);
+		comment_params.put("content",mention_content + "Inbound message from " + <b>contact.get("lastName")</b> + ": " + message_content);
 		// 		comment_params.put("contentType","plainText");
 		comment_params.put("isPublic",true);
 		headerMap = Map();
