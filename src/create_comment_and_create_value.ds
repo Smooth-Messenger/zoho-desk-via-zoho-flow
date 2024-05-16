@@ -23,7 +23,7 @@ try
     if (ticket.get("assigneeId") != null)
 		{
 		  agent = zoho.desk.getRecordById(desk_org_id,"agents",ticket.get("assigneeId"),"zoho_desk_sms");
-      from_owner = " " + <b>agent.get("name")</b>;
+      from_owner = " " + "<b>" + agent.get("name") + "</b>";
 		}
   }
 	comment_params = Map();

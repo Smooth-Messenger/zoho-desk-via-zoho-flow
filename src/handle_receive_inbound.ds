@@ -168,7 +168,7 @@ try
 		// create the comment
 		ticket_id = ticket.get("id");
 		comment_params = Map();
-		comment_params.put("content",mention_content + "Inbound message from " + <b>contact.get("lastName")</b> + ": " + message_content);
+		comment_params.put("content",mention_content + "Inbound message from " + "<b>" + contact.get("lastName") + "</b>" + ": " + message_content);
 		// 		comment_params.put("contentType","plainText");
 		comment_params.put("isPublic",true);
 		headerMap = Map();
