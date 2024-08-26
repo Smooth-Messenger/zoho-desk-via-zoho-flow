@@ -8,7 +8,7 @@ map check_that_message_can_be_sent(int ticket_id, string sms_content, string sen
 {
 try
 {
-	if(channel != "SMS via Zoho Flow" || sms_content.isEmpty() || send_btn_state != "true")
+	if(sms_content.isEmpty() || send_btn_state != "true")
 	{
 		info "stop processing outbound";
 		info "channel> " + channel;
