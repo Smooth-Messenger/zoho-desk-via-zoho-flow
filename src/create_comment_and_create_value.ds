@@ -1,17 +1,33 @@
 /**
 * @ Sinch
 *
-* Last modified date: May 8th, 2024
-* Version: v1.0.0
+* Last modified date: May 14th, 2024
+* Version: v1.0.1
 */
 void create_comment_and_clear_outbound_value(int ticket_id, string sms_content, int desk_org_id)
 {
 // NB - make sure the zoho.com/zoho.com.au URL matches the data center
+
+// true: will enable the mention feature (consume more API call)
+// change this value to false if you don't want to consume more API credit to get the agent data
+// right now we don't support team owner
+display_author_in_sms = true;
+
 try
 {
+  from_owner = "";
+  if (display_author_in_sms)
+  {
+		ticket = zoho.desk.getRecordById(desk_org_id,"tickets",ticket_id,"zoho_desk_sms");
+
+    if (ticket.get("assigneeId") != null)
+		{
+		  agent = zoho.desk.getRecordById(desk_org_id,"agents",ticket.get("assigneeId"),"zoho_desk_sms");
+      from_owner = " " + "<b>" + agent.get("name") + "</b>";
+		}
+  }
 	comment_params = Map();
-	comment_params.put("content","Outbound SMS: " + sms_content);
-	comment_params.put("contentType","plainText");
+	comment_params.put("content","Outbound SMS" + from_owner + ": " + sms_content);
 	comment_params.put("isPublic",true);
 	headerMap = Map();
 	headerMap.put("orgId",desk_org_id);
